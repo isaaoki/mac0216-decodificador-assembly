@@ -20,6 +20,18 @@ section .text
 
 _start:
     ; TODO: solicitar e ler nome do arquivo de entrada
+    ; Solicitar o nome do arquivo, chamando escreve_string(msg_entrada)
+    push msg_entrada
+    call escreve_string
+    add rsp, 8 ; 1 parametro = 8byte
+
+    ; Ler o nome do arquivo, chamando le_string(nome_entrada, 256)
+    ; push 256
+    ; push nome_entrada
+    ; call le_string
+    ; add rsp, 16 ; 2 parametros= 16bytes
+
+
     ; TODO: solicitar e ler nome do arquivo de saída
     ; TODO: abrir arquivos usando abre_arquivo
     ; TODO: loop de leitura byte a byte
@@ -27,5 +39,13 @@ _start:
     ; TODO: combinar bits para reconstruir o code point
     ; TODO: chamar gera_string_hexadecimal e grava_string_arquivo
     ; TODO: fechar os arquivos e encerrar com sys_exit
-    jmp fim_programa
+    ; Colocar de volta dps jmp fim_programa
 
+    ;Teste
+    ; push nome_entrada
+    ; call escreve_string
+    ; add rsp, 8
+
+    mov rax, 60
+    xor rdi, rdi
+    syscall
