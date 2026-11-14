@@ -26,10 +26,10 @@ _start:
     add rsp, 8 ; 1 parametro = 8byte
 
     ; Ler o nome do arquivo, chamando le_string(nome_entrada, 256)
-    ; push 256
-    ; push nome_entrada
-    ; call le_string
-    ; add rsp, 16 ; 2 parametros= 16bytes
+    push 256
+    push nome_entrada
+    call le_string
+    add rsp, 16 ; 2 parametros= 16bytes
 
 
     ; TODO: solicitar e ler nome do arquivo de saída
@@ -39,16 +39,16 @@ _start:
     ; TODO: combinar bits para reconstruir o code point
     ; TODO: chamar gera_string_hexadecimal e grava_string_arquivo
     ; TODO: fechar os arquivos e encerrar com sys_exit
-    ; Colocar de volta dps jmp fim_programa
+    jmp fim_programa
 
     ;Teste
     ; push nome_entrada
     ; call escreve_string
     ; add rsp, 8
 
-    mov rax, 60
-    xor rdi, rdi
-    syscall
+    ; mov rax, 60
+    ; xor rdi, rdi
+    ; syscall
 
 global escreve_string
 
@@ -77,3 +77,52 @@ escreve_string:
     mov rsp, rbp
     pop rbp
     ret
+
+global le_string    
+
+le_string:
+    push rbp
+    mov rbp, rsp
+    ;Salvando valores antigos
+    push rbx 
+    push r12
+    push r13
+
+    mov r12, [rbp + 16] ;nome_entrada
+    mov r13, [rbp + 24] ;tam_max
+
+    xor rbx, rbx ;Contador de caracteres lidos
+    .leitura:
+        mov rax, r13
+        dec rax
+        cmp rbx, rax ;tamanho maior que o limite do buffer
+        jge .fim
+
+        ;Leitura
+        mov rax, 0  
+        xor rdi, rdi 
+        lea rsi, [r12+rbx] 
+        mov rdx, 1
+        syscall 
+
+        cmp rax,0 ;fim de arquivo ou erro
+        jle .fim
+
+        mov al, byte [r12 + rbx]
+        cmp al, 0x0A ;Enter
+        je .fim
+
+        inc rbx
+        jmp .leitura
+    
+    .fim:
+        mov byte [r12+rbx], 0 ;Null no final
+        mov rax, rbx ;Retorno da qnt de caracteres
+
+        ;Restaurar as pilhas
+        pop r13
+        pop r12
+        pop rbx
+        mov rsp, rbp
+        pop rbp
+        ret 
