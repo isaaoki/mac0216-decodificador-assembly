@@ -49,3 +49,31 @@ _start:
     mov rax, 60
     xor rdi, rdi
     syscall
+
+global escreve_string
+
+escreve_string:
+    push rbp
+    mov rbp, rsp
+    mov rsi, [rbp + 16]       
+    mov rdi, rsi ;auxiliar para contar os caracteres
+    ;Contagem de caracteres ate null
+    xor rdx, rdx
+.conta:
+    mov al, byte [rdi + rdx]
+    cmp al, 0
+    je .escreve
+    inc rdx
+    jmp .conta
+
+.escreve:
+    cmp rdx, 0
+    je .fim
+
+    mov rax, 1
+    mov rdi, 1
+    syscall
+.fim:
+    mov rsp, rbp
+    pop rbp
+    ret
