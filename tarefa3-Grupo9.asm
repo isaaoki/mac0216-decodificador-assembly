@@ -29,3 +29,26 @@ _start:
     ; TODO: fechar os arquivos e encerrar com sys_exit
     jmp fim_programa
 
+bits 64
+global le_byte_arquivo
+global grava_string_arquivo
+
+section .text
+
+; le_byte_arquivo(int descritor_arquivo, char* byte_arq)
+; Empilhar byte_arq e depois descritor_arquivo antes do call.
+; Retorno: RAX = bytes lidos (1), EOF (0) ou erro (valor negativo).
+le_byte_arquivo:
+    push rbp
+    mov rbp, rsp
+
+    mov rdi, [rbp + 16] ; descritor_arquivo
+    ; assume que foi armazenado em rdp +16 o código de descritor.
+    mov rsi, [rbp + 24] ; endereço de byte_arq
+    ; assume que foi armazenado o endereço de byte_arq em rdp+24.
+    mov edx, 1 ; ler exatamente um byte
+    mov eax, 0 ; sys_read = 0
+    syscall
+
+    pop rbp
+    ret ; o chamador remove os parâmetros da pilha
