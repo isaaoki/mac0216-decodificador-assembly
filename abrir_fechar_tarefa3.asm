@@ -46,6 +46,11 @@ _start:
     cmp rax, -1
     je erro ;função global para tratamento de erros 
 
+    mov r12, rax
+    call fecha_arquivo
+    cmp rax, -1
+    je erro
+
     
 
     push 577 ; Abrindo arquivo com flag de criação, escrita e truncamento
@@ -55,6 +60,12 @@ _start:
 
     cmp rax, -1
     je erro
+
+    mov r12, rax
+    call fecha_arquivo
+    cmp rax, -1
+    je erro
+
 
 
 
@@ -202,5 +213,23 @@ erro:
     mov rax, 60
     mov rdi, 1 ; função erro genérica
     syscall ; sem mensagens específicas (por enquanto)
+
+global fecha_arquivo ; Para função fechar arquivo usaremos r12 como descritor do arquivo, logo temos que salvar na função
+                     ; principal o retorno rax após abertura (salvar em r12), e qualquer mudança em r12 deve ser reparada depois
+fecha_arquivo:
+    mov rax, 3
+    mov rdi, r12
+    syscall
+
+    test rax, rax
+    js .erro
+
+    ret
+
+    .erro:
+        mov rax, -1
+        ret
+
+
 
         
