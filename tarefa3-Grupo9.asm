@@ -2,6 +2,10 @@
 ; Esqueleto NASM x86-64 Linux
 
 global _start
+global escreve_string
+global le_string    
+global le_byte_arquivo
+global grava_string_arquivo
 
 section .data
     msg_entrada db "Digite o nome do arquivo de entrada: ", 0
@@ -19,7 +23,17 @@ section .bss
 section .text
 
 _start:
-    ; TODO: solicitar e ler nome do arquivo de entrada
+    ; Solicitar o nome do arquivo, chamando escreve_string(msg_entrada)
+    push msg_entrada
+    call escreve_string
+    add rsp, 8 ; 1 parametro = 8byte
+
+    ; Ler o nome do arquivo, chamando le_string(nome_entrada, 256)
+    push 256
+    push nome_entrada
+    call le_string
+    add rsp, 16 ; 2 parametros= 16bytes
+
     ; TODO: solicitar e ler nome do arquivo de saída
     ; TODO: abrir arquivos usando abre_arquivo
     ; TODO: loop de leitura byte a byte
@@ -29,15 +43,96 @@ _start:
     ; TODO: fechar os arquivos e encerrar com sys_exit
     jmp fim_programa
 
-bits 64
-global le_byte_arquivo
-global grava_string_arquivo
+; Fim provisório
+fim_programa:
+    mov rax, 60
+    xor rdi, rdi
+    syscall
 
-section .text
+; ---------------------------------------------------------------
+; escreve_string(char* buffer)
+; ---------------------------------------------------------------
+escreve_string:
+    push rbp
+    mov rbp, rsp
+    mov rsi, [rbp + 16]       
+    mov rdi, rsi ;auxiliar para contar os caracteres
+    ;Contagem de caracteres ate null
+    xor rdx, rdx
+.conta:
+    mov al, byte [rdi + rdx]
+    cmp al, 0
+    je .escreve
+    inc rdx
+    jmp .conta
 
+.escreve:
+    cmp rdx, 0
+    je .fim
+
+    mov rax, 1
+    mov rdi, 1
+    syscall
+.fim:
+    mov rsp, rbp
+    pop rbp
+    ret
+
+; ---------------------------------------------------------------
+; le_string(char* buffer, int tam_max)
+; ---------------------------------------------------------------
+le_string:
+    push rbp
+    mov rbp, rsp
+    ;Salvando valores antigos
+    push rbx 
+    push r12
+    push r13
+
+    mov r12, [rbp + 16] ;nome_entrada
+    mov r13, [rbp + 24] ;tam_max
+
+    xor rbx, rbx ;Contador de caracteres lidos
+.leitura:
+    mov rax, r13
+    dec rax
+    cmp rbx, rax ;tamanho maior que o limite do buffer
+    jge .fim
+
+    ;Leitura
+    mov rax, 0  
+    xor rdi, rdi 
+    lea rsi, [r12+rbx] 
+    mov rdx, 1
+    syscall 
+
+    cmp rax,0 ;fim de arquivo ou erro
+    jle .fim
+
+    mov al, byte [r12 + rbx]
+    cmp al, 0x0A ;Enter
+    je .fim
+
+    inc rbx
+    jmp .leitura
+    
+.fim:
+    mov byte [r12+rbx], 0 ;Null no final
+    mov rax, rbx ;Retorno da qnt de caracteres
+
+    ;Restaurar as pilhas
+    pop r13
+    pop r12
+    pop rbx
+    mov rsp, rbp
+    pop rbp
+    ret 
+
+; ---------------------------------------------------------------
 ; le_byte_arquivo(int descritor_arquivo, char* byte_arq)
 ; Empilhar byte_arq e depois descritor_arquivo antes do call.
 ; Retorno: RAX = bytes lidos (1), EOF (0) ou erro (valor negativo).
+; ---------------------------------------------------------------
 le_byte_arquivo:
     push rbp
     mov rbp, rsp
@@ -53,6 +148,10 @@ le_byte_arquivo:
     pop rbp
     ret ; o chamador remove os parâmetros da pilha
 
+; ---------------------------------------------------------------
+; grava_string_arquivo(int descritor_arquivo, char* buffer)
+; Grava a string (com LF) sem o NUL.
+; ---------------------------------------------------------------
 grava_string_arquivo:
     push rbp ;
     mov rbp, rsp;
