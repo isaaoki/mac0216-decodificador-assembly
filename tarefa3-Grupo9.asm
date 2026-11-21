@@ -2,7 +2,9 @@
 
 global _start
 global escreve_string
-global le_string    
+global le_string
+global abre_arquivo
+global fecha_arquivo
 global le_byte_arquivo
 global grava_string_arquivo
 global gera_string_hexadecimal
@@ -23,19 +25,45 @@ section .bss
 section .text
 
 _start:
-    ; Solicitar o nome do arquivo, chamando escreve_string(msg_entrada)
-    push msg_entrada
+    ; Solicitar o nome do arquivo de entrada
+    push msg_entrada ; 1o parametro (8 bytes)
     call escreve_string
-    add rsp, 8 ; 1 parametro = 8byte
+    add rsp, 8 ; Retira parametro da pilha (1 param = 8 bytes)
 
-    ; Ler o nome do arquivo, chamando le_string(nome_entrada, 256)
-    push 256
-    push nome_entrada
+    ; Ler o nome do arquivo de entrada
+    push 256 ; 2o parametro (8 bytes)
+    push nome_entrada ; 1o parametro (8 bytes)
     call le_string
-    add rsp, 16 ; 2 parametros= 16bytes
+    add rsp, 16 ; Retira parametro da pilha (2 param = 16 bytes)
 
-    ; TODO: solicitar e ler nome do arquivo de saída
-    ; TODO: abrir arquivos usando abre_arquivo
+    ; Solicitar o nome do arquivo de saída
+    push msg_saida ; 1o parametro (8 bytes)
+    call escreve_string
+    add rsp, 8 ; Retira parametro da pilha (1 param = 8 bytes)
+
+    ; Ler o nome do arquivo de saída
+    push 256 ; 2o parametro (8 bytes)
+    push nome_saida ; 1o parametro (8 bytes)
+    call le_string
+    add rsp, 16 ; Retira parametros da pilha (2 param = 16 bytes)
+
+    ; Abrir os arquivos 
+    push 0 ; 2o parametro (abrindo arquivo para leitura)
+    push nome_entrada ; 1o parametro (8 bytes)
+    call abre_arquivo
+    add rsp, 16 ; Retira parametros da pilha (2 param = 16 bytes)
+    cmp rax -1 ; Verifica se houve erro
+    je erro
+    mov [descr_entrada], rax
+
+    push 577 ; 2o parametro (abrindo arquivo com flag de criação, escrita e truncamento)
+    push nome_saida ; 1o parametro (8 bytes)
+    call abre_arquivo
+    add rsp, 16 ; Retira parametros da pilha (2 param = 16 bytes)
+    cmp rax, -1 ; Verifica se houve erro
+    je erro
+    mov [descr_saida], rax
+
     ; TODO: loop de leitura byte a byte
     ; TODO: determinar se a sequência UTF-8 possui 1, 2, 3 ou 4 bytes
     ; TODO: combinar bits para reconstruir o code point
@@ -47,7 +75,7 @@ _start:
 
     ; TODO: fechar os arquivos e encerrar com sys_exit
     jmp fim_programa
-    
+
 ; Fim provisório
 fim_programa:
     mov rax, 60
@@ -132,6 +160,66 @@ le_string:
     mov rsp, rbp
     pop rbp
     ret 
+
+; ---------------------------------------------------------------
+; abre_arquivo(char* nome_arquivo, int modo_abertura)
+; ---------------------------------------------------------------
+abre_arquivo:
+    push rbp
+    mov rbp, rsp
+    push r12
+    push r13
+
+    mov r12, [rbp + 16] ; modo de modo_abertura
+    mov r13, [rbp + 24] ; nome do arquivo
+
+
+    cmp r12, 0
+    je .abrir
+
+    cmp r12, 577
+    je .abrir ; cet = criação, leitura e truncamento
+    jmp .fim_erro ; vai para o fim erro já que modo de abertura não está de acordo com o esperado
+
+
+.abrir:
+    mov rax, 2
+    mov rdi, r13
+    mov rsi, r12
+    mov rdx, 438
+    syscall
+    test rax, rax
+    js .fim_erro
+
+    jmp .fim
+
+.fim_erro:
+    mov rax, -1
+    jmp .fim
+
+.fim:
+    pop r13
+    pop r12
+    mov rsp, rbp
+    pop rbp
+    ret
+
+; ---------------------------------------------------------------
+; fecha_arquivo(int descritor_arquivo)
+; ---------------------------------------------------------------
+fecha_arquivo:
+    mov rax, 3
+    mov rdi, r12
+    syscall
+
+    test rax, rax
+    js .erro
+
+    ret
+
+.erro:
+    mov rax, -1
+    ret
 
 ; ---------------------------------------------------------------
 ; le_byte_arquivo(int descritor_arquivo, char* byte_arq)
