@@ -8,6 +8,7 @@ global fecha_arquivo
 global le_byte_arquivo
 global grava_string_arquivo
 global gera_string_hexadecimal
+global erro
 
 section .data
     msg_entrada db "Digite o nome do arquivo de entrada: ", 0
@@ -25,7 +26,7 @@ section .bss
 section .text
 
 _start:
-    ; Solicitar o nome do arquivo de entrada
+    ; 1. Solicitar o nome do arquivo de entrada
     push msg_entrada ; 1o parametro (8 bytes)
     call escreve_string
     add rsp, 8 ; Retira parametro da pilha (1 param = 8 bytes)
@@ -36,7 +37,7 @@ _start:
     call le_string
     add rsp, 16 ; Retira parametro da pilha (2 param = 16 bytes)
 
-    ; Solicitar o nome do arquivo de saída
+    ; 2. Solicitar o nome do arquivo de saída
     push msg_saida ; 1o parametro (8 bytes)
     call escreve_string
     add rsp, 8 ; Retira parametro da pilha (1 param = 8 bytes)
@@ -47,12 +48,12 @@ _start:
     call le_string
     add rsp, 16 ; Retira parametros da pilha (2 param = 16 bytes)
 
-    ; Abrir os arquivos 
+    ; 3. Abrir os arquivos 
     push 0 ; 2o parametro (abrindo arquivo para leitura)
     push nome_entrada ; 1o parametro (8 bytes)
     call abre_arquivo
     add rsp, 16 ; Retira parametros da pilha (2 param = 16 bytes)
-    cmp rax -1 ; Verifica se houve erro
+    cmp rax, -1 ; Verifica se houve erro
     je erro
     mov [descr_entrada], rax
 
@@ -64,23 +65,116 @@ _start:
     je erro
     mov [descr_saida], rax
 
-    ; TODO: loop de leitura byte a byte
-    ; TODO: determinar se a sequência UTF-8 possui 1, 2, 3 ou 4 bytes
-    ; TODO: combinar bits para reconstruir o code point
-    ; TODO: chamar gera_string_hexadecimal e grava_string_arquivo
-    push buffer_hex
-    push rax
+.proximo_caractere:
+    ; 4. Loop de leitura byte a byte do arquivo
+    push byte_arq ; 2o parametro (8 bytes)
+    push qword [descr_entrada] ; 1o parametro (8 bytes)
+    call le_byte_arquivo
+    add rsp, 16
+    cmp rax, 0 ; Verifica se houve erro ou o arquivo está vazio
+    jle fim_programa
+
+    ; 5. Determinar se a sequência UTF-8 possui 1, 2, 3 ou 4 bytes
+    mov al, [byte_arq]
+    mov bl, al 
+    and bl, 10000000b 
+    cmp bl, 00000000b
+    je .sequencia_possui_1_byte
+
+    mov bl, al 
+    and bl, 11100000b 
+    cmp bl, 11000000b
+    je .sequencia_possui_2_bytes
+
+    mov bl, al 
+    and bl, 11110000b 
+    cmp bl, 11100000b
+    je .sequencia_possui_3_bytes
+    jmp .sequencia_possui_4_bytes
+
+; R13: número de bytes - 1 (byte que indica tamanho)
+; AL: byte original retirando os primeiros bytes (que indicam tamanho)
+.sequencia_possui_1_byte:
+    mov r13, 0 
+    and al, 01111111b
+    jmp .inicio_reconstruir
+
+.sequencia_possui_2_bytes:
+    mov r13, 1
+    and al, 00011111b 
+    jmp .inicio_reconstruir
+
+.sequencia_possui_3_bytes:
+    mov r13, 2
+    and al, 00001111b
+    jmp .inicio_reconstruir
+
+.sequencia_possui_4_bytes:
+    mov r13, 3
+    and al, 00000111b 
+    jmp .inicio_reconstruir
+
+.inicio_reconstruir:
+    ; R12 = acumula todos os bits de informação
+    movzx r12, al ; Copia valor de AL (8 bits) para R12 (64 bits) preenchendo bits superiores com 0
+
+.reconstruir:
+    cmp r13, 0 ; Verifica se terminou de ler bytes
+    je .fim_reconstruir
+    
+    ; Lê próximo byte
+    push byte_arq ; 2o parametro (8 bytes)
+    push qword [descr_entrada] ; 1o parametro (8 bytes)
+    call le_byte_arquivo
+    add rsp, 16 ; Retira parametros da pilha
+
+    ; 6. Combinar bits para reconstruir o code point
+    movzx rax, byte [byte_arq] ; Coloca byte do arquivo no RAX  preenchendo bits superiores com 0
+    and al, 00111111b ; Extrai 6 ultimos bits dos ultimos 8 bits de RAX
+    shl r12, 6 ; Abre posições em R12, liberando 6 bits à esquerda
+    or r12, rax ; Junta os valores de R12 e RAX
+    dec r13 ; Diminui quantidade de bits
+    jmp .reconstruir
+
+.fim_reconstruir:
+    mov [code_point], r12 ; Salva R12 no code_point
+
+    ; 7. Chama gera_string_hexadecimal e grava_string_arquivo
+    push buffer_hex ; 2o parametro (8 bytes)
+    push r12 ; 1o parametro (8 bytes)
     call gera_string_hexadecimal
     add rsp, 16 ; Libera os argumentos da pilha
 
-    ; TODO: fechar os arquivos e encerrar com sys_exit
-    jmp fim_programa
+    push buffer_hex ; 2o parametro (8 bytes)
+    push qword [descr_saida] ; 1o parametro (8 bytes)
+    call grava_string_arquivo
+    add rsp, 16 ; Libera os argumentos da pilha
 
-; Fim provisório
+    ; Vai para o próximo caractere do arquivo
+    jmp .proximo_caractere
+
 fim_programa:
-    mov rax, 60
+    ; 8. Fechar os arquivos e encerrar com sys_exit
+    push qword [descr_entrada] ; 1o parametro (8 bytes)
+    call fecha_arquivo 
+    add rsp, 8 ; Retira parametro da pilha
+    cmp rax, -1 ; Verifica se houve erros
+    je erro
+ 
+    push qword [descr_saida] ; 1o parametro (8 bytes)
+    call fecha_arquivo 
+    add rsp, 8 ; Retira parametro da pilha
+    cmp rax, -1 ; Verifica se houve erros
+    je erro
+
+    mov rax, 60 ; sys_exit
     xor rdi, rdi
     syscall
+
+erro:
+    mov rax, 60
+    mov rdi, 1 ; função erro genérica
+    syscall ; sem mensagens específicas (por enquanto)
 
 ; ---------------------------------------------------------------
 ; escreve_string(char* buffer)
@@ -170,17 +264,14 @@ abre_arquivo:
     push r12
     push r13
 
-    mov r12, [rbp + 16] ; modo de modo_abertura
-    mov r13, [rbp + 24] ; nome do arquivo
-
+    mov r13, [rbp + 16] ; modo de modo_abertura (2o parametro)
+    mov r12, [rbp + 24] ; nome do arquivo (1o parametro)
 
     cmp r12, 0
     je .abrir
-
     cmp r12, 577
-    je .abrir ; cet = criação, leitura e truncamento
+    je .abrir 
     jmp .fim_erro ; vai para o fim erro já que modo de abertura não está de acordo com o esperado
-
 
 .abrir:
     mov rax, 2
@@ -190,12 +281,10 @@ abre_arquivo:
     syscall
     test rax, rax
     js .fim_erro
-
     jmp .fim
 
 .fim_erro:
     mov rax, -1
-    jmp .fim
 
 .fim:
     pop r13
@@ -208,17 +297,22 @@ abre_arquivo:
 ; fecha_arquivo(int descritor_arquivo)
 ; ---------------------------------------------------------------
 fecha_arquivo:
+    push rbp
+    mov rbp, rsp
+    mov rdi, [rbp+16] ; Descritor do arquivo
+
     mov rax, 3
     mov rdi, r12
     syscall
-
     test rax, rax
     js .erro
-
-    ret
+    xor rax, rax
+    jmp .fim
 
 .erro:
     mov rax, -1
+.fim:
+    pop rbp
     ret
 
 ; ---------------------------------------------------------------
