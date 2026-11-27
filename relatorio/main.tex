@@ -1,0 +1,104 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[brazilian]{babel}
+\usepackage[left=3cm,top=3cm,right=2cm,bottom=2cm]{geometry}
+\usepackage{graphicx}
+\usepackage{setspace}
+\usepackage[colorlinks=true, urlcolor=blue, linkcolor=blue]{hyperref}
+\usepackage{xurl}
+\usepackage{tikz}
+\usepackage{listings}
+\usepackage{booktabs}
+\usepackage{float}
+
+\onehalfspacing
+
+\begin{document}
+
+\begin{titlepage}    
+    \begin{center}     
+        {\large \textbf{UNIVERSIDADE DE SÃO PAULO}} \\
+        {\large \textbf{INSTITUTO DE MATEMÁTICA, ESTATÍSTICA E CIÊNCIA DA COMPUTAÇÃO}} \\
+
+        \vspace{5cm}
+        \vfill
+        
+        \begin{minipage}{0.8\textwidth}
+            \centering
+            {\Large \textbf{MAC0216 - Trabalho Prático 3 -  Decodificador UTF-8 em Assembly}} \\
+            \vspace{0.8cm}
+            {\large Gabriela Kwong Yamaguti (16967502),\\Isabela Suemi Aoki (15637975),\\Yoonsik Hur (16905558),\\Viviane Aiko Yamamoto (5515726)}
+        \end{minipage}
+        
+        \vfill
+        \vfill
+        
+        {\large São Paulo} \\
+        {\large 2026}
+    \end{center}
+    
+    \vspace*{\fill}
+\end{titlepage}
+
+\newpage
+\tableofcontents
+\thispagestyle{empty}
+
+\newpage
+\pagenumbering{arabic}
+
+% 1. Introdução -----------------------------------------------------
+\section{Introdução}
+
+O presente trabalho teve como objetivo desenvolver um programa em Assembly NASM para Linux de 64 bits. Ele lê um arquivo de texto em UTF-8 e produz outro arquivo com o código Unicode de cada caractere, escrito em hexadecimal. O desenvolvimento foi versionado com Git em um repositório no GitHub, e o programa pode ser montado e ligado com o Makefile incluído.
+
+\subsection{Explicação do Funcionamento do Programa}
+\subsubsection*{Convenção de chamada}
+Todos os parâmetros das funções são passados pela pilha, ocupando 8 bytes cada, empilhados do último para o primeiro. Dentro da função, o primeiro parâmetro fica em \texttt{[rbp+16]} e o segundo em \texttt{[rbp+24]}. O chamador remove os parâmetros com \texttt{add rsp}, e o valor de retorno é entregue em \texttt{RAX}.
+
+\subsubsection*{Funções obrigatórias}
+\begin{enumerate}
+    \item \texttt{escreve\_string}: conta os caracteres até o NUL e escreve na saída padrão (\texttt{sys\_write}).
+    \item \texttt{le\_string}: lê da entrada padrão (\texttt{sys\_read}) byte a byte até o ENTER ou até \texttt{tam\_max - 1}. Grava o NUL e devolve em \texttt{RAX} a quantidade lida.
+    \item \texttt{abre\_arquivo}: valida o modo (0 ou 577) e chama \texttt{sys\_open} com permissão 438. Devolve o descritor ou $-1$ em caso de erro.
+    \item \texttt{fecha\_arquivo}: fecha o descritor com \texttt{sys\_close}. Devolve 0 ou $-1$.
+    \item \texttt{le\_byte\_arquivo}: lê 1 byte do arquivo para o endereço dado. Devolve em \texttt{RAX} a quantidade lida (0 indica fim do arquivo).
+    \item \texttt{grava\_string\_arquivo}: calcula o tamanho da string até o NUL e grava no arquivo, incluindo o LF e excluindo o NUL.
+    \item \texttt{gera\_string\_hexadecimal}: converte o valor para hexadecimal maiúsculo com prefixo \texttt{0x}, seguido de LF e NUL. 
+\end{enumerate}
+
+\subsubsection*{Fluxo do programa principal}
+\begin{enumerate}
+    \item Solicita e lê os nomes dos arquivos de entrada e de saída, com \texttt{escreve\_string} e \texttt{le\_string}.
+    \item Abre o arquivo de entrada para leitura (modo 0) e o de saída para escrita, criação e truncamento (modo 577), com \texttt{abre\_arquivo}. Se qualquer abertura retornar $-1$, o programa encerra com código 1.
+    
+    \item Entra no laço principal, que lê um byte por vez com \texttt{le\_byte\_arquivo} até o retorno ser 0 (que representa o fim do arquivo). Para cada caractere:
+    \begin{enumerate}
+        \item \textbf{Identifica o tamanho da sequência}: com \texttt{AND} e \texttt{CMP} sobre o primeiro byte. O registrador \texttt{R13} guarda o número de bytes de continuação e \texttt{AL} armazena apenas os bits de dados do primeiro byte. 
+        \item \textbf{Reconstrói o code point} em \texttt{R12}: para cada byte de continuação, lê o byte, mantém seus 6 bits de dados (\texttt{AND 00111111b}), desloca \texttt{R12} 6 bits à esquerda (\texttt{SHL}) e junta os bits com \texttt{OR}.
+        \item \textbf{Converte para hexadecimal:} usando \texttt{gera\_string\_hexadecimal}, o valor é dividido por 16 repetidamente e os restos são empilhados. Ao desempilhar, a ordem fica invertida e cada resto é convertido em dígito (\texttt{0}--\texttt{9}: soma 48; \texttt{A}--\texttt{F}: soma 55). O buffer recebe \texttt{0x}, os dígitos, e depois, LF e NUL.
+        \item \textbf{Grava a linha} no arquivo de saída com \texttt{grava\_string\_arquivo}.
+    \end{enumerate}
+    \item Ao chegar ao fim do arquivo, fecha os dois descritores com \texttt{fecha\_arquivo} e encerra com \texttt{sys\_exit} (código 0).
+\end{enumerate}
+
+% 2. Testes Realizados -----------------------------------------------
+\section{Testes Realizados}
+
+% 3. Dificuldades Encontradas -----------------------------------------
+\section{Dificuldades Encontradas}
+
+% 4. Contribuição dos Integrantes -----------------------------------------
+\section{Contribuição dos Integrantes}
+\begin{enumerate}
+    \item Gabriela:
+    \item Isabela: desenvolvimento de \texttt{gera\_string\_hexadecimal} e do fluxo principal do programa, além da escrita do relatório.
+    \item Viviane:
+    \item Yoonsik:
+\end{enumerate}
+
+% 5. Links -----------------------------------------
+\section{Links}
+Link do GitHub: \url{https://github.com/isaaoki/mac0216-decodificador-assembly}
+
+\end{document}
